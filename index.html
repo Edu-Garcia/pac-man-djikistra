@@ -1,20 +1,49 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <title>Pac-Man com Dijkstra (p5.js)</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body { display:flex; justify-content:center; align-items:center; height:100vh; margin:0; background:#111; color:#eee; font-family:Arial, sans-serif; }
-    #instructions { position:fixed; top:12px; left:12px; background:rgba(0,0,0,0.6); padding:8px 10px; border-radius:6px; font-size:13px; }
-  </style>
-</head>
+<script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
 <body>
-  <div id="instructions">
-    Use as setas ou WASD para mover. Fantasmas usam Dijkstra para perseguir. Recarrega a página para reiniciar.
+  <div id="menu" class="screen">
+    <h1>Escolha o Nível</h1>
+    <button onclick="startGame(0)">Muito Fácil</button>
+    <button onclick="startGame(1)">Fácil</button>
+    <button onclick="startGame(2)">Médio</button>
+    <button onclick="startGame(3)">Difícil</button>
+    <button onclick="startGame(4)">Muito Difícil</button>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
-  <script src="sketch-test.js"></script>
+  <div id="gameover" class="screen hidden">
+    <h1>Game Over</h1>
+    <button onclick="restart()">Reiniciar</button>
+    <button onclick="goToMenu()">Cancelar</button>
+  </div>
+
+  <div id="victory" class="screen hidden">
+    <h1>🎉 Você concluiu todas as fases!</h1>
+    <button onclick="goToMenu()">Voltar ao Menu</button>
+  </div>
+
+  <div id="canvas-container" class="screen hidden">
+    <script src="sketch.js"></script>
+  </div>
 </body>
-</html>
+
+<style>
+  body {
+    background: #000;
+    color: white;
+    font-family: sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .screen {
+    text-align: center;
+  }
+  .hidden {
+    display: none;
+  }
+  canvas {
+    border: 2px solid #ffa32b;
+  }
+</style>

@@ -1,15 +1,20 @@
-// Pac-Man com p5.js + Fantasmas com Dijkstra + Power-ups
+// Pac-Man Educacional (versão híbrida com HTML + p5.js)
+// O p5.js agora cuida apenas da lógica e renderização do jogo dentro do canvas
+// As telas de menu, game over e vitória são controladas via HTML/CSS
 
-// --- Níveis (0: Muito fácil, 1: Fácil, 2: Médio, 3: Difícil, 4: Muito difícil) ---
-// Cada nível é um array de strings (linhas)
-const levels = [];
+// -------------------- Variáveis globais --------------------
+let cellSize = 30;
+let levels = [];
+let currentLevel = 0;
+let rows, cols;
+let grid = [];
+let pacman;
+let ghosts = [];
+let powerMode = false;
+let powerTimer = 0;
+let gameRunning = false;
 
-let gameState = 'menu'; // 'menu' | 'playing' | 'levelComplete'
-
-
-// Legenda do mapa (0=ponto, 1=parede, 2=vazio, 3=power-up)
-
-/* Muito fácil (ex.: labirinto espaçado, muitas bolinhas) */
+// -------------------- Configuração de níveis --------------------
 levels.push([
   "11111111111111111111",
   "10000000000000000001",
@@ -23,7 +28,6 @@ levels.push([
   "11111111111111111111"
 ]);
 
-/* Fácil */
 levels.push([
   "11111111111111111111",
   "10000001111000000001",
@@ -37,7 +41,6 @@ levels.push([
   "11111111111111111111"
 ]);
 
-/* Médio (seu layout atual adaptado para 10 linhas -> mantive estrutura, você pode ajustar) */
 levels.push([
   "11111111111111111111",
   "10000000001100000001",
@@ -52,7 +55,6 @@ levels.push([
   "11111111111111111111"
 ]);
 
-/* Difícil (labirinto mais fechado, menos power-ups) */
 levels.push([
   "11111111111111111111",
   "10010001000100001001",
@@ -67,7 +69,6 @@ levels.push([
   "11111111111111111111"
 ]);
 
-/* Muito difícil (gaiola bem fechada, caminhos tortuosos) */
 levels.push([
   "11111111111111111111",
   "10001001310101010101",
@@ -81,29 +82,73 @@ levels.push([
   "11111111111111111111"
 ]);
 
+// -------------------- p5.js Setup --------------------
+function setup() {
+  let container = document.getElementById("canvas-container");
+  let cnv = createCanvas(600, 600);
+  cnv.parent(container);
+  frameRate(10);
+  background(0); // <- adiciona fundo preto inicial
+  noLoop();
+}
 
-// Controle de nível atual
-let currentLevel = 2
-let rows = levels[currentLevel].length;
-let cols = levels[currentLevel][0].length;
-const cellSize = 30;
+// -------------------- Funções de controle --------------------
+function startGame(levelIndex) {
+  console.log("start")
+  currentLevel = levelIndex;
+  document.getElementById("menu").classList.add("hidden");
+  document.getElementById("gameover").classList.add("hidden");
+  document.getElementById("victory").classList.add("hidden");
+  document.getElementById("canvas-container").classList.remove("hidden"); // <- mostrar o canvas
 
-let pacman;
-let ghosts = [];
-let grid = [];
+  loadLevel(currentLevel);
+  gameRunning = true;
+  loop();
+  redraw(); // <- força o primeiro frame
+}
 
-let powerMode = false;
-let powerTimer = 0;
+function restart() {
+  document.getElementById("gameover").classList.add("hidden");
+  loadLevel(currentLevel);
+  loop();
+}
 
+function goToMenu() {
+  document.getElementById("menu").classList.remove("hidden");
+  document.getElementById("gameover").classList.add("hidden");
+  document.getElementById("victory").classList.add("hidden");
+  document.getElementById("canvas-container").classList.add("hidden"); // <- esconder o canvas
+  
+  noLoop();
+  gameRunning = false;
+  clear();
+}
+
+function gameOver() {
+  document.getElementById("gameover").classList.remove("hidden");
+  // eslint-disable-next-line no-console
+  console.log('Game Over');
+  noLoop();
+}
+
+function nextLevelOrVictory() {
+  if (currentLevel < levels.length - 1) {
+    currentLevel++;
+    loadLevel(currentLevel);
+  } else {
+    document.getElementById("victory").classList.remove("hidden");
+    noLoop();
+  }
+}
+
+// -------------------- Lógica de níveis --------------------
 function loadLevel(index) {
-  currentLevel = index;
-  const mapLayout = levels[currentLevel];
+  console.log("load")
+  const mapLayout = levels[index];
   rows = mapLayout.length;
   cols = mapLayout[0].length;
-  // (re)cria canvas se necessário
   resizeCanvas(cols * cellSize, rows * cellSize);
 
-  // Converte layout em grid
   grid = [];
   for (let y = 0; y < rows; y++) {
     grid[y] = [];
@@ -112,28 +157,49 @@ function loadLevel(index) {
     }
   }
 
-  // Inicializa entidades
   pacman = new Pacman(1, 1);
-  ghosts = [];
-  ghosts.push(new Ghost(cols - 2, rows - 2, color(255, 0, 0)));
-  ghosts.push(new Ghost(1, rows - 2, color(0, 0, 255)));
-  ghosts.push(new Ghost(cols - 2, 1, color(255, 105, 180)));
+  ghosts = [
+    new Ghost(cols - 2, rows - 2, color(255, 0, 0), 0),
+    // new Ghost(1, rows - 2, color(0, 0, 255), 1),
+    // new Ghost(cols - 2, 1, color(255, 105, 180), 2)
+  ];
+  powerMode = false;
+  powerTimer = 0;
 }
 
-function setup() {
-  createCanvas(cols * cellSize, rows * cellSize);
-  frameRate(10);
-  loadLevel(currentLevel);
-}
+// -------------------- p5.js Loop --------------------
+function draw() {
+  console.log("draw")
+  console.log(pacman)
+  console.log(ghosts)
+  
+  if (!gameRunning) return;
 
-function checkVictory() {
-  return !grid.some(row => row.includes(0) || row.includes(3));
-}
-
-function drawGame() {
   background(0);
+  drawMap();
+  pacman.update();
+  pacman.show();
 
-  // Desenha mapa
+  for (let ghost of ghosts) {
+    ghost.update();
+    ghost.show();
+
+    if (ghost.respawnTimer === 0 && ghost.x === pacman.x && ghost.y === pacman.y) {
+      if (powerMode) ghost.reset();
+      else gameOver();
+    }
+  }
+
+  if (powerMode) {
+    powerTimer--;
+    if (powerTimer <= 0) powerMode = false;
+  }
+
+  if (checkVictory()) nextLevelOrVictory();
+}
+
+// -------------------- Desenho do mapa --------------------
+function drawMap() {
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       if (grid[y][x] === 1) {
@@ -143,149 +209,14 @@ function drawGame() {
         fill(255, 255, 0, 150);
         ellipse(x * cellSize + cellSize / 2, y * cellSize + cellSize / 2, 8);
       } else if (grid[y][x] === 3) {
-        fill(255, 255, 255);
+        fill(255);
         ellipse(x * cellSize + cellSize / 2, y * cellSize + cellSize / 2, 16);
       }
     }
   }
-
-  // Atualiza Pac-Man
-  pacman.update();
-  pacman.show();
-
-  // Atualiza fantasmas
-  for (let ghost of ghosts) {
-    ghost.update();
-    ghost.show();
-
-    // Colisão com Pac-Man
-    if (ghost.x === pacman.x && ghost.y === pacman.y) {
-      if (powerMode) {
-        // Fantasma "morre" e volta ao canto inicial
-        ghost.reset();
-      } else {
-        // Pac-Man morre
-        noLoop();
-        fill(255, 0, 0);
-        textSize(32);
-        textAlign(CENTER, CENTER);
-        text("GAME OVER", width / 2, height / 2);
-      }
-    }
-  }
-  
-
-  // Controle do tempo do poder
-  if (powerMode) {
-    powerTimer--;
-    if (powerTimer <= 0) {
-      powerMode = false;
-    }
-  }
-
-  if (checkVictory()) {
-    gameState = 'levelComplete';
-  }
 }
 
-function drawMenu() {
-  background(10);
-  fill(255);
-  textAlign(CENTER, TOP);
-  textSize(36);
-  text('Escolha o nível', width/2, 40);
-
-  textSize(16);
-  // para cada nível mostrar botão simples
-  const labels = ['Muito Fácil','Fácil','Médio','Difícil','Muito Difícil'];
-  for (let i=0;i<labels.length;i++){
-    const bx = width/2 - 120;
-    const by = 120 + i*60;
-    const bw = 240; const bh = 44;
-    fill('#444');
-    rect(bx, by, bw, bh, 8);
-    fill(255);
-    text(labels[i], width/2, by + bh/2 - 6);
-  }
-}
-
-function drawLevelComplete() {
-  background(0,150);
-  fill(255);
-  textAlign(CENTER, CENTER);
-  textSize(36);
-  text('Fase concluída!', width/2, height/2 - 40);
-
-  // botões
-  const bw = 160, bh = 44;
-  // Se não for o último nível, mostrar Continuar
-  if (currentLevel < levels.length - 1) {
-    fill('#2d9cdb'); // continuar
-    rect(width/2 - bw - 10, height/2 + 10, bw, bh, 8);
-    fill(255); text('Continuar', width/2 - bw/2 - 10, height/2 + 10 + bh/2 - 6);
-  }
-  // Sempre mostrar Cancelar (voltar ao menu)
-  fill('#777'); // cancelar
-  rect(width/2 + 10, height/2 + 10, bw, bh, 8);
-  fill(255); text('Cancelar', width/2 + bw/2 + 10, height/2 + 10 + bh/2 - 6);
-}
-
-function draw() {
-  background(0);
-
-  if (gameState === 'menu') {
-    drawMenu();
-    return;
-  }
-
-  if (gameState === 'playing') {
-    drawGame(); // desenha mapa, atualiza entidades, checa vitória etc.
-    return;
-  }
-
-  if (gameState === 'levelComplete') {
-    drawLevelComplete();
-    return;
-  }
-}
-
-function mousePressed() {
-  if (gameState === 'menu') {
-    const bx = width / 2 - 120;
-    for (let i = 0; i < levels.length; i++) {
-      const by = 120 + i * 60;
-      const bw = 240, bh = 44;
-      if (mouseX >= bx && mouseX <= bx + bw && mouseY >= by && mouseY <= by + bh) {
-        loadLevel(i);
-        gameState = 'playing';
-        return;
-      }
-    }
-  } else if (gameState === 'levelComplete') {
-    const bw = 160, bh = 44;
-    // Botão "Continuar"
-    if (currentLevel < levels.length - 1) {
-      const contX = width / 2 - bw - 10, contY = height / 2 + 10;
-      if (mouseX >= contX && mouseX <= contX + bw && mouseY >= contY && mouseY <= contY + bh) {
-        loadLevel(currentLevel + 1);
-        gameState = 'playing';
-        return;
-      }
-    }
-    // Botão "Cancelar"
-    const cancelX = width / 2 + 10, cancelY = height / 2 + 10;
-    if (mouseX >= cancelX && mouseX <= cancelX + bw && mouseY >= cancelY && mouseY <= cancelY + bh) {
-      gameState = 'menu';
-      return;
-    }
-  }
-}
-
-
-
-// ==========================
-// Classes
-// ==========================
+// -------------------- Classes --------------------
 class Pacman {
   constructor(x, y) {
     this.x = x;
@@ -298,19 +229,22 @@ class Pacman {
     let newX = this.x + this.dirX;
     let newY = this.y + this.dirY;
 
+    // impede acessos fora do grid
+    if (newX < 0 || newY < 0 || newX >= cols || newY >= rows) return;
+
     if (grid[newY][newX] !== 1) {
       this.x = newX;
       this.y = newY;
 
-      if (grid[newY][newX] === 0) {
-        grid[newY][newX] = 2; // remove ponto
-      } else if (grid[newY][newX] === 3) {
-        grid[newY][newX] = 2; // remove power-up
+      if (grid[newY][newX] === 0) grid[newY][newX] = 2;
+      else if (grid[newY][newX] === 3) {
+        grid[newY][newX] = 2;
         powerMode = true;
-        powerTimer = 50; // dura 50 ticks (~5s)
+        powerTimer = 50;
       }
     }
   }
+
 
   show() {
     fill(powerMode ? color(0, 255, 0) : color(255, 255, 0));
@@ -319,52 +253,50 @@ class Pacman {
 }
 
 class Ghost {
-  constructor(x, y, c) {
+  constructor(x, y, c, id) {
     this.startX = x;
     this.startY = y;
     this.x = x;
     this.y = y;
     this.c = c;
+    this.id = id;
     this.path = [];
-    this.respawnTimer = 0; // contador de respawn (0 = vivo)
+    this.respawnTimer = 0;
   }
 
   reset() {
-    this.respawnTimer = 60; // duração do respawn em frames (~3s a 30fps; ajuste se usar outro frameRate)
-    this.x = -999; // joga o fantasma "fora" do mapa
+    this.respawnTimer = 90;
+    this.x = -999;
     this.y = -999;
   }
 
   update() {
     if (this.respawnTimer > 0) {
       this.respawnTimer--;
-      // Quando o timer zerar, volta para o spawn
       if (this.respawnTimer === 0) {
         this.x = this.startX;
         this.y = this.startY;
-        this.pixelX = this.x * cellSize;
-        this.pixelY = this.y * cellSize;
         this.path = [];
       }
-      return; // enquanto em respawn, não faz nada
+      return;
     }
 
-
-    // Fantasmas se movem mais rápido (a cada 5 frames)
-    if (frameCount % 10 === 0) {
+    if (frameCount % (10 + this.id) === 0) {
       this.findPath();
-
       if (this.path.length > 1) {
         this.path.shift();
         let nextStep = this.path[0];
-        this.x = nextStep.x;
-        this.y = nextStep.y;
+        if (!ghosts.some(g => g !== this && g.x === nextStep.x && g.y === nextStep.y)) {
+          this.x = nextStep.x;
+          this.y = nextStep.y;
+        }
       }
     }
   }
 
   show() {
-    fill(powerMode ? color(150) : this.c); // cinza se Pac-Man estiver em poder
+    if (this.respawnTimer > 0) return;
+    fill(powerMode ? color(150) : this.c);
     rect(this.x * cellSize + 5, this.y * cellSize + 5, cellSize - 10, cellSize - 10, 10);
   }
 
@@ -373,19 +305,17 @@ class Ghost {
   }
 }
 
-// ==========================
-// Algoritmo de Dijkstra
-// ==========================
-function dijkstra(start, end) {
-  let dist = {};
-  let prev = {};
-  let pq = [];
-
-  function key(x, y) {
-    return `${x},${y}`;
+// -------------------- Utilitários --------------------
+function checkVictory() {
+  for (let row of grid) {
+    if (row.includes(0)) return false;
   }
+  return true;
+}
 
-  // Inicialização
+function dijkstra(start, end) {
+  let dist = {}, prev = {}, pq = [];
+  function key(x, y) { return `${x},${y}`; }
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       if (grid[y][x] !== 1) {
@@ -394,7 +324,6 @@ function dijkstra(start, end) {
       }
     }
   }
-
   dist[key(start.x, start.y)] = 0;
   pq.push({ x: start.x, y: start.y, d: 0 });
 
@@ -402,7 +331,6 @@ function dijkstra(start, end) {
     pq.sort((a, b) => a.d - b.d);
     let u = pq.shift();
     let uKey = key(u.x, u.y);
-
     if (u.x === end.x && u.y === end.y) break;
 
     let neighbors = [
@@ -431,25 +359,14 @@ function dijkstra(start, end) {
     path.unshift(u);
     u = prev[key(u.x, u.y)];
   }
-
   return path;
 }
 
-// ==========================
-// Controles
-// ==========================
+// -------------------- Controles --------------------
 function keyPressed() {
-  if (keyCode === LEFT_ARROW) {
-    pacman.dirX = -1;
-    pacman.dirY = 0;
-  } else if (keyCode === RIGHT_ARROW) {
-    pacman.dirX = 1;
-    pacman.dirY = 0;
-  } else if (keyCode === UP_ARROW) {
-    pacman.dirX = 0;
-    pacman.dirY = -1;
-  } else if (keyCode === DOWN_ARROW) {
-    pacman.dirX = 0;
-    pacman.dirY = 1;
-  }
+  if (!gameRunning) return;
+  if (keyCode === LEFT_ARROW) { pacman.dirX = -1; pacman.dirY = 0; }
+  else if (keyCode === RIGHT_ARROW) { pacman.dirX = 1; pacman.dirY = 0; }
+  else if (keyCode === UP_ARROW) { pacman.dirX = 0; pacman.dirY = -1; }
+  else if (keyCode === DOWN_ARROW) { pacman.dirX = 0; pacman.dirY = 1; }
 }
